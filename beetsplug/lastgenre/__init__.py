@@ -81,7 +81,7 @@ def find_parents(candidate, branches):
     for branch in branches:
         try:
             idx = branch.index(candidate.lower())
-            return list(reversed(branch[:idx + 1]))
+            return branch[:idx + 1][::-1]
         except ValueError:
             continue
     return [candidate]
@@ -344,14 +344,15 @@ class LastGenrePlugin(plugins.BeetsPlugin):
                 self._log.info(u'genre for album {0} ({1}): {0.genre}',
                                album, src)
                 album.store()
-
+                # import pdb; pdb.set_trace()
                 for item in album.items():
                     # If we're using track-level sources, also look up each
                     # track on the album.
                     if 'track' in self.sources:
                         item.genre, src = self._get_genre(item)
+                        item.grouping = find_parents(item.genre.split(self.config['separator'].get(unicode))[0], self.c14n_branches)[-1]
                         item.store()
-                        self._log.info(u'genre for track {0} ({1}): {0.genre}',
+                        self._log.info(u'genre for track {0} ({1}): {0.genre} grouping {0.grouping}',
                                        item, src)
 
                     if write:
@@ -372,6 +373,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
             if 'track' in self.sources:
                 for item in album.items():
                     item.genre, src = self._get_genre(item)
+                    item.grouping = find_parents(item.genre, self.c14n_branches)[-1]
                     self._log.debug(u'added last.fm item genre ({0}): {1}',
                                     src, item.genre)
                     item.store()
@@ -379,6 +381,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         else:
             item = task.item
             item.genre, src = self._get_genre(item)
+            item.grouping = find_parents(item.genre, self.c14n_branches)[-1]
             self._log.debug(u'added last.fm item genre ({0}): {1}',
                             src, item.genre)
             item.store()
