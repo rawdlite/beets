@@ -336,27 +336,22 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         )
 
         def lastgenre_func(lib, opts, args):
-            write = config['import']['write'].get(bool)
+            # write = config['import']['write'].get(bool)
             self.config.set_args(opts)
-
-            for album in lib.albums(ui.decargs(args)):
-                album.genre, src = self._get_genre(album)
-                self._log.info(u'genre for album {0} ({1}): {0.genre}',
-                               album, src)
-                album.store()
+            # import pdb; pdb.set_trace()
+            albums  = [album for album in lib.albums(ui.decargs(args))]
+            if not albums:
+                albums = set([track.get_album() for track in lib.items(ui.decargs(args))])
+            for album in albums:
+                self._write_tag_for_album(album)
                 # import pdb; pdb.set_trace()
-                for item in album.items():
-                    # If we're using track-level sources, also look up each
-                    # track on the album.
-                    if 'track' in self.sources:
-                        item.genre, src = self._get_genre(item)
-                        item.grouping = find_parents(item.genre.split(self.config['separator'].get(unicode))[0], self.c14n_branches)[-1]
-                        item.store()
-                        self._log.info(u'genre for track {0} ({1}): {0.genre} grouping {0.grouping}',
-                                       item, src)
-
-                    if write:
-                        item.try_write()
+                if 'track' in self.sources:
+                    for item in album.items():
+                        # If we're using track-level sources, also look up each
+                        # track on the album.
+                        self._write_tag_for_item(item)
+                        # if write:
+                        #    item.try_write()
 
         lastgenre_cmd.func = lastgenre_func
         return [lastgenre_cmd]
@@ -365,26 +360,32 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         """Event hook called when an import task finishes."""
         if task.is_album:
             album = task.album
-            album.genre, src = self._get_genre(album)
-            self._log.debug(u'added last.fm album genre ({0}): {1}',
-                            src, album.genre)
-            album.store()
-
+            self._write_tag_for_album(album)
             if 'track' in self.sources:
                 for item in album.items():
-                    item.genre, src = self._get_genre(item)
-                    item.grouping = find_parents(item.genre, self.c14n_branches)[-1]
-                    self._log.debug(u'added last.fm item genre ({0}): {1}',
-                                    src, item.genre)
-                    item.store()
-
+                    self._write_tag_for_item(item)
         else:
             item = task.item
-            item.genre, src = self._get_genre(item)
-            item.grouping = find_parents(item.genre, self.c14n_branches)[-1]
-            self._log.debug(u'added last.fm item genre ({0}): {1}',
-                            src, item.genre)
+            self._write_tag_for_item(item)
+
+    def _write_tag_for_item(self, item):
+        genres, src = self._get_genre(item)
+        if genres:
+            item.genre = genres.split(self.config['separator'].get(unicode))[0]
+            item.grouping = find_parents(item.genre, self.c14n_branches)[-1].title()
             item.store()
+        self._log.info(u'genre for track {0} ({1}): {0.genre} grouping: {0.grouping}',
+                       item, src)
+
+    def _write_tag_for_album(self, album):
+        genres, src = self._get_genre(album)
+        if genres:
+            album.genre = genres.split(self.config['separator'].get(unicode))[0]
+            if self.config['count'] > 1:
+                album.multi_genre = genres
+            self._log.info(u'genre for album {0} ({1}): {0.genre}, multi: {0.multi_genre}',
+                               album, src)
+            album.store()
 
     def _tags_for(self, obj, min_weight=None):
         """Core genre identification routine.
